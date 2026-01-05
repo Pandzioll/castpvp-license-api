@@ -38,7 +38,7 @@ app.post('/api/verify', async (req, res) => {
         const license = await License.findOne({ key });
         
         if (!license) {
-            return res.json({ success: false, message: 'Nieprawid³owy klucz licencji' });
+            return res.json({ success: false, message: 'NieprawidÂ³owy klucz licencji' });
         }
 
         if (!license.active) {
@@ -61,9 +61,9 @@ app.post('/api/verify', async (req, res) => {
             return res.json({ success: false, message: 'HWID nie pasuje - licencja przypisana do innego serwera' });
         }
 
-        res.json({ success: true, message: 'Licencja wa¿na' });
+        res.json({ success: true, message: 'Licencja waÂ¿na' });
     } catch (error) {
-        res.json({ success: false, message: 'B³¹d serwera: ' + error.message });
+        res.json({ success: false, message: 'BÂ³Â¹d serwera: ' + error.message });
     }
 });
 
@@ -73,12 +73,12 @@ app.post('/api/add', async (req, res) => {
         const { key, serverId, owner } = req.body;
         
         if (!key || !serverId || !owner) {
-            return res.json({ success: false, message: 'Wype³nij wszystkie pola' });
+            return res.json({ success: false, message: 'WypeÂ³nij wszystkie pola' });
         }
 
         const exists = await License.findOne({ key });
         if (exists) {
-            return res.json({ success: false, message: 'Klucz ju¿ istnieje' });
+            return res.json({ success: false, message: 'Klucz juÂ¿ istnieje' });
         }
 
         const license = new License({ key, serverId, owner, active: true });
@@ -86,7 +86,7 @@ app.post('/api/add', async (req, res) => {
 
         res.json({ success: true, message: 'Licencja dodana' });
     } catch (error) {
-        res.json({ success: false, message: 'B³¹d: ' + error.message });
+        res.json({ success: false, message: 'BÂ³Â¹d: ' + error.message });
     }
 });
 
@@ -96,7 +96,7 @@ app.post('/api/check', async (req, res) => {
         const { key, serverId } = req.body;
         
         if (!key || !serverId) {
-            return res.json({ success: false, message: 'Wype³nij wszystkie pola' });
+            return res.json({ success: false, message: 'WypeÂ³nij wszystkie pola' });
         }
 
         const license = await License.findOne({ key, serverId });
@@ -117,7 +117,7 @@ app.post('/api/check', async (req, res) => {
             }
         });
     } catch (error) {
-        res.json({ success: false, message: 'B³¹d: ' + error.message });
+        res.json({ success: false, message: 'BÂ³Â¹d: ' + error.message });
     }
 });
 
@@ -148,7 +148,7 @@ app.post('/api/manage', async (req, res) => {
 
         res.json({ success: true, message: 'Licencja zaktualizowana' });
     } catch (error) {
-        res.json({ success: false, message: 'B³¹d: ' + error.message });
+        res.json({ success: false, message: 'BÂ³Â¹d: ' + error.message });
     }
 });
 
@@ -158,7 +158,7 @@ app.get('/api/list', async (req, res) => {
         const licenses = await License.find().select('-__v').sort({ createdAt: -1 });
         res.json({ success: true, data: licenses });
     } catch (error) {
-        res.json({ success: false, message: 'B³¹d: ' + error.message });
+        res.json({ success: false, message: 'BÂ³Â¹d: ' + error.message });
     }
 });
 
@@ -170,5 +170,6 @@ app.listen(PORT, () => {
 
 **3. .env**
 ```
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/castpvp-licenses
+mongodb+srv://pandziol_:PJmaiMTV4DQn23oo@astpvp-licenses.asaunxo.mongodb.net/?appName=astpvp-licenses 
+
 PORT=3000
