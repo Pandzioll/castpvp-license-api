@@ -170,6 +170,6 @@ app.listen(PORT, () => {
 
 **3. .env**
 ```
-mongodb+srv://pandziol_:PJmaiMTV4DQn23oo@astpvp-licenses.asaunxo.mongodb.net/?appName=astpvp-licenses 
-
+MONGODB_URI=mongodb+srv://pandziol_:PJmaiMTV4DQn23oo@astpvp-licenses.asaunxo.mongodb.net/castpvp-licenses?retryWrites=true&w=majority
 PORT=3000
+
