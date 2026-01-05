@@ -1,13 +1,25 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const bcrypt = require('bcrypt');
+const session = require('express-session');
 require('dotenv').config();
 
 const app = express();
-app.use(cors());
+app.use(cors({
+    origin: true,
+    credentials: true
+}));
 app.use(express.json());
+app.use(express.static('public'));
+app.use(session({
+    secret: process.env.SESSION_SECRET || 'twoj-super-tajny-klucz-zmien-to',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } // 24h
+}));
 
-// MongoDB Schema
+// MongoDB Schemas
 const licenseSchema = new mongoose.Schema({
     key: { type: String, required: true, unique: true },
     serverId: { type: String, required: true },
@@ -17,16 +29,92 @@ const licenseSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
+const adminSchema = new mongoose.Schema({
+    username: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now }
+});
+
 const License = mongoose.model('License', licenseSchema);
+const Admin = mongoose.model('Admin', adminSchema);
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI)
     .then(() => console.log('Connected to MongoDB'))
     .catch(err => console.error('MongoDB error:', err));
 
-// === ENDPOINTS ===
+// Middleware do sprawdzania logowania
+const requireAuth = (req, res, next) => {
+    if (req.session && req.session.adminId) {
+        next();
+    } else {
+        res.status(401).json({ success: false, message: 'Brak autoryzacji' });
+    }
+};
 
-// 1. Verify License (plugin sprawdza)
+// === ADMIN ENDPOINTS ===
+
+// Rejestracja admina (użyj TYLKO RAZ, potem możesz usunąć ten endpoint)
+app.post('/api/admin/register', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        
+        // Sprawdź czy już istnieje admin
+        const existingAdmin = await Admin.findOne();
+        if (existingAdmin) {
+            return res.json({ success: false, message: 'Admin już istnieje' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const admin = new Admin({ username, password: hashedPassword });
+        await admin.save();
+
+        res.json({ success: true, message: 'Admin utworzony' });
+    } catch (error) {
+        res.json({ success: false, message: 'Błąd: ' + error.message });
+    }
+});
+
+// Logowanie
+app.post('/api/admin/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        
+        const admin = await Admin.findOne({ username });
+        if (!admin) {
+            return res.json({ success: false, message: 'Nieprawidłowe dane' });
+        }
+
+        const validPassword = await bcrypt.compare(password, admin.password);
+        if (!validPassword) {
+            return res.json({ success: false, message: 'Nieprawidłowe dane' });
+        }
+
+        req.session.adminId = admin._id;
+        res.json({ success: true, message: 'Zalogowano' });
+    } catch (error) {
+        res.json({ success: false, message: 'Błąd: ' + error.message });
+    }
+});
+
+// Wylogowanie
+app.post('/api/admin/logout', (req, res) => {
+    req.session.destroy();
+    res.json({ success: true, message: 'Wylogowano' });
+});
+
+// Sprawdź czy zalogowany
+app.get('/api/admin/check', (req, res) => {
+    if (req.session && req.session.adminId) {
+        res.json({ success: true, loggedIn: true });
+    } else {
+        res.json({ success: false, loggedIn: false });
+    }
+});
+
+// === LICENSE ENDPOINTS (dla pluginu) ===
+
+// 1. Verify License (plugin sprawdza - BEZ AUTORYZACJI)
 app.post('/api/verify', async (req, res) => {
     try {
         const { key, serverId, hwid } = req.body;
@@ -49,16 +137,14 @@ app.post('/api/verify', async (req, res) => {
             return res.json({ success: false, message: 'Licencja przypisana do innego serwera' });
         }
 
-        // First time activation - bind HWID
         if (!license.hwid) {
             license.hwid = hwid;
             await license.save();
             return res.json({ success: true, message: 'Licencja aktywowana' });
         }
 
-        // Check HWID match
         if (license.hwid !== hwid) {
-            return res.json({ success: false, message: 'HWID nie pasuje - licencja przypisana do innego serwera' });
+            return res.json({ success: false, message: 'HWID nie pasuje' });
         }
 
         res.json({ success: true, message: 'Licencja ważna' });
@@ -67,8 +153,10 @@ app.post('/api/verify', async (req, res) => {
     }
 });
 
-// 2. Add License (panel)
-app.post('/api/add', async (req, res) => {
+// === PANEL ENDPOINTS (wymagają autoryzacji) ===
+
+// 2. Add License
+app.post('/api/add', requireAuth, async (req, res) => {
     try {
         const { key, serverId, owner } = req.body;
         
@@ -90,8 +178,8 @@ app.post('/api/add', async (req, res) => {
     }
 });
 
-// 3. Check License (panel)
-app.post('/api/check', async (req, res) => {
+// 3. Check License
+app.post('/api/check', requireAuth, async (req, res) => {
     try {
         const { key, serverId } = req.body;
         
@@ -121,10 +209,10 @@ app.post('/api/check', async (req, res) => {
     }
 });
 
-// 4. Manage License (panel - activate/deactivate)
-app.post('/api/manage', async (req, res) => {
+// 4. Manage License
+app.post('/api/manage', requireAuth, async (req, res) => {
     try {
-        const { key, action, reason } = req.body;
+        const { key, action } = req.body;
         
         if (!key || !action) {
             return res.json({ success: false, message: 'Brak wymaganych danych' });
@@ -153,10 +241,27 @@ app.post('/api/manage', async (req, res) => {
 });
 
 // 5. List All Licenses
-app.get('/api/list', async (req, res) => {
+app.get('/api/list', requireAuth, async (req, res) => {
     try {
         const licenses = await License.find().select('-__v').sort({ createdAt: -1 });
         res.json({ success: true, data: licenses });
+    } catch (error) {
+        res.json({ success: false, message: 'Błąd: ' + error.message });
+    }
+});
+
+// 6. Delete License
+app.post('/api/delete', requireAuth, async (req, res) => {
+    try {
+        const { key } = req.body;
+        
+        const result = await License.deleteOne({ key });
+        
+        if (result.deletedCount === 0) {
+            return res.json({ success: false, message: 'Nie znaleziono licencji' });
+        }
+
+        res.json({ success: true, message: 'Licencja usunięta' });
     } catch (error) {
         res.json({ success: false, message: 'Błąd: ' + error.message });
     }
